@@ -12,7 +12,7 @@ This system automates the entire outbound sourcing cycle—from localized direct
 
 ## 🏗️ Architecture & Workflow Overview
 
-![Medvora Lead Gen System Canvas](./images/workflow-canvas.png)
+![Medvora Lead Gen System Canvas](.Medvora_lead_gen_canvas.jpg)
 
 ### Sourcing & Data Extraction Matrix
 * **Scheduled Execution:** Triggered via cron schedule to execute automated batch runs.
