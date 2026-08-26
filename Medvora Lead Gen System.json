@@ -1,0 +1,785 @@
+{
+  "name": "Medvora Lead Gen System",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -240,
+        -240
+      ],
+      "id": "0d79e752-a920-459e-ab26-696d6d750317",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const searches = [];\n\nconst config = [\n  {\n    region: \"USA\",\n    cities: [\n      \"New York, NY\",\n      \"Los Angeles, CA\",\n      \"Miami, FL\",\n      \"Houston, TX\",\n      \"Dallas, TX\",\n      \"Austin, TX\",\n      \"Phoenix, AZ\",\n      \"Chicago, IL\",\n      \"Atlanta, GA\",\n      \"Tampa, FL\",\n      \"Orlando, FL\",\n      \"Charlotte, NC\",\n      \"Raleigh, NC\",\n      \"Nashville, TN\",\n      \"Denver, CO\",\n      \"Las Vegas, NV\",\n      \"San Diego, CA\",\n      \"San Francisco, CA\",\n      \"San Jose, CA\",\n      \"Seattle, WA\",\n      \"Boston, MA\",\n      \"Washington, DC\",\n      \"Philadelphia, PA\",\n      \"Scottsdale, AZ\",\n      \"Fort Lauderdale, FL\"\n    ]\n  }\n];\n\nconst niches = [\n  \"dental clinic\",\n  \"cosmetic dentist\",\n  \"orthodontist\",\n  \"med spa\",\n  \"aesthetic clinic\",\n  \"plastic surgery clinic\",\n  \"dermatology clinic\",\n  \"fertility clinic\",\n  \"chiropractic clinic\",\n  \"optometry clinic\",\n  \"hair transplant clinic\",\n  \"weight loss clinic\"\n];\n\nfor (const region of config) {\n  for (const city of region.cities) {\n    for (const niche of niches) {\n      searches.push({\n        json: {\n          region: region.region,\n          city: city,\n          niche: niche,\n          query: `${niche} in ${city}`\n        }\n      });\n    }\n  }\n}\n\nreturn searches;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        -240
+      ],
+      "id": "10d64199-3b5b-4cf1-96ec-62185e18cea9",
+      "name": "Search Matrix"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        160,
+        -240
+      ],
+      "id": "df37ba57-7e17-4db7-b854-eac1cc329259",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputItems = $input.all();\n\nreturn inputItems.map(item => {\n  const d = item.json;\n\n  // Helper: safely get the first value from an array\n  const first = (value) => {\n    if (Array.isArray(value) && value.length > 0) {\n      return value[0];\n    }\n    return null;\n  };\n\n  // Helper: extract URL from enriched profile objects\n  const profileUrl = (profiles) => {\n    if (!Array.isArray(profiles) || profiles.length === 0) {\n      return null;\n    }\n\n    return profiles[0]?.externalProfileURL || null;\n  };\n\n  // Extract social URLs\n  const facebook =\n    first(d.facebooks) ||\n    profileUrl(d.facebookProfiles);\n\n  const instagram =\n    first(d.instagrams) ||\n    profileUrl(d.instagramProfiles);\n\n  const linkedin =\n    first(d.linkedIns) ||\n    first(d.linkedin) ||\n    first(d.linkedins);\n\n  // Extract email if Apify found one\n  const email = first(d.emails);\n\n  // Extract domain\n  let domain = d.domain || null;\n\n  if (!domain && d.website) {\n    try {\n      domain = new URL(d.website).hostname\n        .replace(/^www\\./, '');\n    } catch (error) {\n      domain = null;\n    }\n  }\n\n  return {\n    json: {\n      company_name: d.title || null,\n      category: d.categoryName || null,\n\n      website: d.website || null,\n      domain: domain,\n\n      phone: d.phone || null,\n      phone_unformatted: d.phoneUnformatted || null,\n\n      address: d.address || null,\n      street: d.street || null,\n      city: d.city || null,\n      state: d.state || null,\n      postal_code: d.postalCode || null,\n      country: d.countryCode || null,\n\n      google_maps_url: d.url || null,\n\n      rating: d.totalScore || null,\n      review_count: d.reviewsCount || null,\n\n      facebook: facebook,\n      instagram: instagram,\n      linkedin: linkedin,\n\n      email: email,\n      email_source: email ? \"Apify\" : null,\n      email_verified: false,\n\n      description: d.description || null,\n\n      permanently_closed: d.permanentlyClosed || false,\n      temporarily_closed: d.temporarilyClosed || false,\n\n      // Keep the original search context\n      search_niche: $('Loop Over Items').item.json.niche || null,\n      search_city: $('Loop Over Items').item.json.city || null,\n      search_region: $('Loop Over Items').item.json.region || null\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        -224
+      ],
+      "id": "38c0ba15-c1b7-4e52-be83-d24f64405188",
+      "name": "Normalize Lead Data"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0ffd3fc9-8c64-40fa-8146-5ab842a28135",
+              "leftValue": "={{ $json.permanently_closed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "8b7b3736-0a6d-491e-a2d7-5ab76012151d",
+              "leftValue": "={{ $json.temporarily_closed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        720,
+        -224
+      ],
+      "id": "72724396-c89f-4efe-9c87-d82b03add034",
+      "name": "Eligibility Filter"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4a327dbc-1294-408d-bb5a-fb4168354a67",
+              "leftValue": "={{ $json.phone }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "8b6f42f2-2a07-46d7-831b-5b02a6b35d0c",
+              "leftValue": "={{ $json.facebook }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "e9d3c8e9-11ef-4bd4-925d-9a1795652f16",
+              "leftValue": "={{ $json.instagram }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "989935ef-6d62-4c30-a51a-22e0c1543099",
+              "leftValue": "={{ $json.linkedin }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        912,
+        -240
+      ],
+      "id": "956f8304-dccc-418e-82e4-978e639fd0e4",
+      "name": "Has Contact Path"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apify.com/v2/actors/gordian~email-extractor/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"urls\": [\n    \"{{ $json.website || 'https://' + $json.domain }}\"\n  ],\n  \"crawl\": true\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        64,
+        -48
+      ],
+      "id": "6490d4f2-d4c1-4d98-8d15-844691aefe46",
+      "name": "Email Enrichment",
+      "retryOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ltWR3hhfhqy8***",
+          "name": "Header Auth account 2"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6964d3d0-2b3f-4942-8aca-d2e21add54d4",
+              "leftValue": "={{ $json.domain }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "dcf56787-a1e5-464a-a4da-08c2f4ed97f0",
+              "leftValue": "={{ $json.website }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -176,
+        -32
+      ],
+      "id": "75f462d5-23c5-4694-affd-854d82fefb20",
+      "name": "Has Domain/Website"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Extract all items in batch mode\nconst allItems = $input.all();\n\n// 2. Filter out sentry, wixpress, and placeholder noise\nconst cleanItems = allItems.filter(item => {\n  const email = (item.json.email || '').toLowerCase();\n  \n  const isNoise = email.includes('sentry') || \n                  email.includes('wixpress') || \n                  email.includes('example.com') ||\n                  email.includes('sentry-next') ||\n                  email.endsWith('.png') || \n                  email.endsWith('.jpg');\n\n  return email && !isNoise;\n});\n\n// 3. Find target priority email prefixes (info@, dental@, contact@, dds@)\nconst priorityList = cleanItems.filter(item => {\n  const e = item.json.email.toLowerCase();\n  return e.startsWith('info@') || e.startsWith('dental@') || e.startsWith('contact@') || e.startsWith('dds@');\n});\n\n// 4. Return priority list, or fallback to first valid clean item, or empty array\nif (priorityList.length > 0) {\n  return priorityList.slice(0, 1); // Keep the single best primary inbox\n} else if (cleanItems.length > 0) {\n  return [cleanItems[0]];\n} else {\n  return [];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        -64
+      ],
+      "id": "fec69d89-d033-41d7-96b8-d21f74345bd9",
+      "name": "Filter Out Sentry & Noise Emails"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Get the original full lead data (contains socials, address, phone, etc.)\nconst allOriginalLeads = $('Normalize Lead Data').all().map(item => item.json);\n\n// 2. Get the clean email extracted by the filter node\nconst filteredItems = $input.all();\n\nconst getDomain = (url) => {\n  try {\n    return new URL(url).hostname.replace(/^www\\./, '');\n  } catch (e) {\n    return url || '';\n  }\n};\n\nreturn filteredItems.map(item => {\n  const currentItem = item.json;\n  const extractedEmail = currentItem.email || null;\n  const extractedUrl = currentItem.url || currentItem.sourceUrl || '';\n  const currentDomain = getDomain(extractedUrl);\n\n  // Match back to the original lead record by domain\n  const matchedLead = allOriginalLeads.find(lead => {\n    if (!lead.website && !lead.domain) return false;\n    const leadDomain = getDomain(lead.website || lead.domain || '');\n    return leadDomain === currentDomain;\n  }) || allOriginalLeads[0] || {};\n\n  // Combine original lead details + newly enriched email\n  return {\n    json: {\n      ...matchedLead,\n      website: extractedUrl || matchedLead.website || null,\n      email: extractedEmail,\n      email_source: 'Apify'\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        -64
+      ],
+      "id": "e6cf81b5-dd50-4fb4-b049-e5b2ad0d0a47",
+      "name": "Merge Enriched Lead Data"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/contacts/upsert",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "=Authorization",
+              "value": "=Bearer YOUR_GHL_PIT"
+            },
+            {
+              "name": "=Version",
+              "value": "=2021-07-28"
+            },
+            {
+              "name": "=Content-Type",
+              "value": "=application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"locationId\": \"YOUR_LOCATION_ID\",\n  \"assignedTo\": \"YOUR_GHL_USER_ID\",\n  \"name\": \"{{ $json.company_name }}\",\n  \"companyName\": \"{{ $json.company_name }}\",\n  \"phone\": \"{{ $json.phone_unformatted || $json.phone }}\",\n  \"address1\": \"{{ $json.street || $json.address }}\",\n  \"city\": \"{{ $json.city }}\",\n  \"state\": \"{{ $json.state }}\",\n  \"postalCode\": \"{{ $json.postal_code }}\",\n  \"country\": \"{{ $json.country || 'US' }}\",\n  \"source\": \"n8n Scraper - No Website\",\n  \"tags\": [\"no-website\", \"n8n-scraped\"],\n  \"customFields\": [\n    {\n      \"id\": \"Lhj4s3P3E7******\",\n      \"value\": \"{{ $json.google_maps_url || '' }}\"\n    },\n    {\n      \"id\": \"SuAL6bdvSQ*****\",\n      \"value\": \"{{ $json.rating || '' }}\"\n    },\n    {\n      \"id\": \"Zr2x8Lqjpxc******\",\n      \"value\": \"{{ $json.review_count || '' }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -64,
+        128
+      ],
+      "id": "497a818f-268a-4619-a700-ff5464a391f8",
+      "name": "GHL - Leads with no Website"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5-mini-2025-08-07",
+          "mode": "list",
+          "cachedResultName": "GPT-5-MINI-2025-08-07"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=You are the Medvora Lead Qualification Extraction Engine. Evaluate raw business text, website content, reviews, job listings, and social media posts, then extract structured evidence flags. Do not output conversational text or estimate scores. Return ONLY a structured JSON payload following the required schema."
+            },
+            {
+              "content": "=Evaluate this lead data and return ONLY valid JSON:\n\nWebsite: {{ $json.website || 'N/A' }}\nReviews: {{ $json.reviews || 'N/A' }}\nSocials: {{ $json.social_posts || 'N/A' }}\n\nJSON Schema:\n{\n  \"icp_signals\": { \"is_healthcare\": true, \"specialty_tier\": 1, \"is_private_practice\": true, \"is_approved_market\": true },\n  \"phone_dependency\": { \"call_to_book_prominent\": true, \"phone_number_in_header\": true, \"has_ai_receptionist\": false },\n  \"booking_friction\": { \"has_direct_online_booking\": false, \"limited_booking_system\": true, \"directs_call_for_info\": true },\n  \"after_hours\": { \"has_extended_hours\": true, \"has_247_answering\": false },\n  \"patient_acquisition\": { \"active_ad_campaigns\": true, \"social_media_promotions_active\": true, \"social_evidence_snippets\": [] },\n  \"revenue_signals\": { \"offers_high_value_services\": true, \"high_value_examples\": [], \"multi_doctor_or_location\": false },\n  \"operational_pain\": { \"hiring_front_office\": true, \"hiring_roles_detected\": [], \"negative_phone_reviews_count\": 0, \"review_snippets\": [], \"social_media_complaints\": [] }\n}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        656,
+        -64
+      ],
+      "id": "67cc497b-d022-4c07-b574-699ff1dd9336",
+      "name": "Extract Lead Evidence Flags",
+      "credentials": {
+        "openAiApi": {
+          "id": "VW**s*76wONPJ***",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Extract and clean raw JSON text from OpenAI output\nconst rawText = $input.item.json.output[0].content[0].text;\nconst cleanJsonString = rawText.replace(/```json/g, '').replace(/```/g, '').trim();\n\n// 2. Parse raw string into structured evidence flags\nconst flags = JSON.parse(cleanJsonString);\n\n// 3. Initialize scoring engine\nlet score = 0;\nconst reasons = [];\n\n// ICP Signals\nif (flags.icp_signals?.is_healthcare) { score += 10; reasons.push(\"Healthcare practice\"); }\nif (flags.icp_signals?.is_private_practice) { score += 15; reasons.push(\"Private practice\"); }\nif (flags.icp_signals?.is_approved_market) { score += 15; reasons.push(\"Approved target market\"); }\nif (flags.icp_signals?.specialty_tier >= 1) { score += 15; reasons.push(\"High specialty tier\"); }\n\n// Phone Dependency & Booking Friction\nif (flags.phone_dependency?.call_to_book_prominent || flags.phone_dependency?.phone_number_in_header) {\n  score += 15;\n  reasons.push(\"Phone-dependent booking process\");\n}\nif (flags.booking_friction?.directs_call_for_info || !flags.booking_friction?.has_direct_online_booking) {\n  score += 10;\n  reasons.push(\"Direct/online booking friction\");\n}\n\n// Operational Pain & Patient Acquisition\nif (flags.after_hours?.has_extended_hours) { score += 5; reasons.push(\"Has extended/after-hours service\"); }\nif (flags.patient_acquisition?.active_ad_campaigns) { score += 10; reasons.push(\"Active patient acquisition ads\"); }\nif (flags.patient_acquisition?.social_media_promotions_active) { score += 5; reasons.push(\"Active social media evidence\"); }\n\n// Determine Lead Temperature\nlet temperature = \"COLD\";\nlet status = \"unqualified\";\n\nif (score >= 70) {\n  temperature = \"HOT\";\n  status = \"qualified\";\n} else if (score >= 45) {\n  temperature = \"WARM\";\n  status = \"qualified\";\n}\n\n// 4. Output unified payload\nreturn {\n  json: {\n    ...flags,\n    qualification_score: score,\n    lead_temperature: temperature,\n    qualification_status: status,\n    qualification_reasons: reasons\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        -64
+      ],
+      "id": "6acaeb60-64dd-420f-91f5-5640f76c2abb",
+      "name": "Parse & Qualification Engine"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.lead_temperature }}",
+                    "rightValue": "HOT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "eeede9b5-67bf-4cef-9c02-b27a905f98db"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "HOT"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "228608ea-96c4-4555-addb-2df7b8982e11",
+                    "leftValue": "={{ $json.lead_temperature }}",
+                    "rightValue": "WARM",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "WARM"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "1010ae56-baad-4b83-8d8f-1f844d31cc4d",
+                    "leftValue": "={{ $json.lead_temperature }}",
+                    "rightValue": "COLD",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "COLD"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        176,
+        160
+      ],
+      "id": "0c76d3ab-b99a-455a-b185-dc9567bee204",
+      "name": "Lead Temperature"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        448,
+        160
+      ],
+      "id": "5c0fecea-27bc-4439-a7ca-74ec145c9579",
+      "name": "Qualified Leads"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const currentData = $input.item.json;\nconst origLead = $('Merge Enriched Lead Data').first().json || {};\n\nconst reasonsText = Array.isArray(currentData.qualification_reasons) \n  ? currentData.qualification_reasons.join(', ') \n  : (currentData.qualification_reasons || '');\n\nreturn {\n  json: {\n    // Required Location ID\n    locationId: \"YOUR_LOCATION_ID\",\n    \"assignedTo\": \"YOUR_GHL_USER_ID\",\n\n    // Standard GHL Contact Fields\n    name: origLead.company_name || 'Unknown Business',\n    companyName: origLead.company_name || 'Unknown Business',\n    email: origLead.email || undefined,\n    phone: origLead.phone_unformatted || origLead.phone || undefined,\n    website: origLead.website || undefined,\n    address1: origLead.street || origLead.address || undefined,\n    city: origLead.city || undefined,\n    state: origLead.state || undefined,\n    postalCode: origLead.postal_code || undefined,\n    country: origLead.country || 'US',\n    source: origLead.source || 'n8n Scraper',\n\n    // Map your custom fields using their exact IDs from your list\n    customFields: [\n      { id: \"z0vqg5jlo3V4Ofp***\", value: reasonsText }, // Example: Conversion Leak\n      { id: \"SuAL6bdvSQ1tSa***\", value: String(origLead.rating || 0) },\n      { id: \"Zr2x8Lqjpxcm8A******\", value: String(origLead.review_count || 0) },\n      { id: \"N3LJ2d1q3dDuF*****\", value: String(currentData.qualification_score || 0) },\n      { id: \"Lhj4s3P3E****\", value: origLead.google_maps_url || '' },\n      { id: \"pPVB0S8iElZS****\", value: origLead.lead_id || origLead.domain || '' }\n    ]\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        160
+      ],
+      "id": "cd15cfa3-1829-4beb-ac51-626f2d309c10",
+      "name": "Prepare GHL Contact"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/contacts/upsert",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "=Authorization",
+              "value": "=Bearer YOUR_GHL_PIT"
+            },
+            {
+              "name": "=Version",
+              "value": "=2021-07-28"
+            },
+            {
+              "name": "=Content-Type",
+              "value": "=application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        848,
+        160
+      ],
+      "id": "8477f7af-0c61-439a-ae8c-f6941e23a805",
+      "name": "GHL"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apify.com/v2/acts/compass~crawler-google-places/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"searchStringsArray\": [\n    \"{{ $json.niche }}\"\n  ],\n  \"locationQuery\": \"{{ $json.city }}, USA\",\n  \"maxCrawledPlacesPerSearch\": 10,\n  \"language\": \"en\",\n  \"scrapeSocialMediaProfiles\": {\n    \"facebooks\": true,\n    \"instagrams\": true,\n    \"linkedin\": true,\n    \"youtubes\": false,\n    \"tiktoks\": false,\n    \"twitters\": false\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        384,
+        -224
+      ],
+      "id": "127f375b-fe6d-4c2b-8194-1a75a5b9d26b",
+      "name": "Apify",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ltW**hhfh*****",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://services.leadconnectorhq.com/locations/YOUR_LOCATION_ID/customFields",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "=Authorization",
+              "value": "=Bearer YOUR_GHL_PIT"
+            },
+            {
+              "name": "=Version",
+              "value": "=2021-07-28"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        768,
+        400
+      ],
+      "id": "6d1d8f2b-9108-4716-b974-e556d028cd05",
+      "name": "HTTP Request1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Search Matrix",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Matrix": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Apify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Lead Data": {
+      "main": [
+        [
+          {
+            "node": "Eligibility Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eligibility Filter": {
+      "main": [
+        [
+          {
+            "node": "Has Contact Path",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Contact Path": {
+      "main": [
+        [
+          {
+            "node": "Has Domain/Website",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Has Domain/Website": {
+      "main": [
+        [
+          {
+            "node": "Email Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GHL - Leads with no Website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Filter Out Sentry & Noise Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Out Sentry & Noise Emails": {
+      "main": [
+        [
+          {
+            "node": "Merge Enriched Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Enriched Lead Data": {
+      "main": [
+        [
+          {
+            "node": "Extract Lead Evidence Flags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Lead Evidence Flags": {
+      "main": [
+        [
+          {
+            "node": "Parse & Qualification Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Qualification Engine": {
+      "main": [
+        [
+          {
+            "node": "Lead Temperature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Temperature": {
+      "main": [
+        [
+          {
+            "node": "Qualified Leads",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Qualified Leads",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Qualified Leads": {
+      "main": [
+        [
+          {
+            "node": "Prepare GHL Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare GHL Contact": {
+      "main": [
+        [
+          {
+            "node": "GHL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify": {
+      "main": [
+        [
+          {
+            "node": "Normalize Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL - Leads with no Website": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "3d01ee08-c5de-4200-829b-f8cd2a57b877",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "7ee97f48417fe887a2c4ccefaf20cdd71a3de917ff7dae4638456068d45f7e28"
+  },
+  "nodeGroups": [],
+  "id": "MGiVjGduBCDnCvzV",
+  "tags": []
+}
