@@ -55,7 +55,7 @@ This system automates the entire outbound sourcing cycle—from localized direct
 
 2. Download the Medvora Lead Gen System.json file from this repository and import it via the top-right menu.
 
-3. Download the [Medvora Lead Gen System.json](./Medvora%20Lead%20Gen%20System.json) file from this repository and import it via the top-right menu.
+3. Download the [Medvora Lead Gen System.json](Medvora%20Lead%20Gen%20System.json) file from this repository and import it via the top-right menu.
 4. Configure your API Credentials in n8n:
    * **Apify API Token**
    * **OpenAI API Key**
