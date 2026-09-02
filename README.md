@@ -51,6 +51,23 @@ This system automates the entire outbound sourcing cycle—from localized direct
 
 ## ⚙️ How to Deploy
 
-1. Clone this repository:
-   ```bash
-   git clone [https://github.com/YOUR_USERNAME/medvora-lead-gen-automation.git](https://github.com/YOUR_USERNAME/medvora-lead-gen-automation.git)
+1. Open your n8n instance and create a New Workflow.
+
+2. Download the Medvora Lead Gen System.json file from this repository and import it via the top-right menu.
+
+3. Configure your API Credentials in n8n:
+
+4. Apify API Token
+
+5. OpenAI API Key
+
+6. GoHighLevel OAuth2 / Bearer Token
+
+7. Replace the sanitized GHL contact field IDs, and the placeholder values in the configuration nodes (locationId, assignedTo, target location strings).
+
+8. Save and Publish the workflow.
+
+---
+
+## License
+This project is open-source and available under the MIT License.
